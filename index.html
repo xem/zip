@@ -1,0 +1,103 @@
+﻿<!doctype html>
+<body id=b>
+<tt>
+<h1>zip</h1>
+<p>- paste a text file
+<p>- choose a file name: <input id=nameinput value="a.txt">
+<p>- it will be zipped optimally
+<br><br>
+<textarea id=html1 spellcheck=false>HELLO</textarea>
+<br>
+<p><button id=pack1>zip</button> 
+<br><br>
+<p><b>Zip</b>
+<p><a href="" download="file.zip" id=dl1>...</a>
+
+
+<style>
+body { font-size: 11px }
+textarea { font-size: 9px; width: 600px; height: 130px; }
+</style>
+
+<script src="jszip.min.js"></script>
+<script src="zopfli/libzopfli.js"></script>
+<script src="zopfli/compress.js"></script>
+<script src="zopfli/byte-b64.js"></script>
+
+<script type=module defer>
+
+
+// zip 
+let zip = async () => {
+
+  const z = window.Module;
+  var code = html1.value;
+
+  function ensureByteBuffer(input) {
+    if (typeof input === 'string') {
+      const a = z.intArrayFromString(input);
+      a.length--; // because emscripten's intArrayFromString() adds trailing nul
+      return a;
+    } else if (Array.isArray(input)) {
+      return Uint8Array.from(input);
+    } else {
+      return input;
+    }
+  }
+
+  const defaultOptions = {
+    verbose: false,
+    verbose_more: false,
+    numiterations: 15,
+    blocksplitting: true,
+    blocksplittingmax: 15,
+  };
+
+  function compress(input, format, options) {
+    console.assert(input != null, "buffer must not be null");
+    console.assert(options != null, "options must not be null");
+
+    const byteBuffer = ensureByteBuffer(input);
+    const bufferPtr = z.allocate(byteBuffer, 'i8', z.ALLOC_NORMAL);
+
+    const opts = { ...defaultOptions, ...options };
+
+    const output = z._createZopfliJsOutput();
+    z._compress(bufferPtr, byteBuffer.length, output,
+      format,
+      opts.verbose,
+      opts.verbose_more,
+      opts.numiterations,
+      opts.blocksplitting,
+      opts.blocksplittingmax,
+    );
+
+    const outputPtr = z._getBuffer(output);
+    const outputSize = z._getBufferSize(output);
+
+    const result = z.HEAPU8.slice(outputPtr, outputPtr + outputSize);
+    z._deallocate(outputPtr);
+    z._deallocate(output);
+    z._deallocate(bufferPtr);
+
+    return result;
+  }
+
+  //code = "\ufeff" + code;
+  var inflated = (new TextEncoder()).encode(code);
+  var deflated = compress(inflated, 2, defaultOptions);
+  var zipzop = makeZip(nameinput.value, inflated, deflated);
+  var decoder = new TextDecoder('utf8');
+  var zipzop64 = bytesToBase64(zipzop);
+  dl1.setAttribute("download", "file.zip");
+  dl1.innerHTML = "Download (" + zipzop.length + " bytes, " + (new Date()).toLocaleTimeString() + ")";
+  dl1.href = "data:application/zip;base64," + zipzop64;
+
+}
+
+
+pack1.onclick = async () => {
+  zip();
+}
+
+</script>
